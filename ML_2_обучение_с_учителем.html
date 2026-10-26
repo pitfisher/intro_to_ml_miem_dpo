@@ -1,0 +1,1411 @@
+<!--
+Ниже — обновлённая версия презентации. Я добавил:
+
+- удобные CSS-классы для изображений: `img-contain`, `img-half`, `img-small`, `img-full`;
+- стилизованные заглушки `img-placeholder`, чтобы было видно, куда положить картинку;
+- подготовленные места под изображения по ключевым темам: сигмоида, дисбаланс, ROC/PR, kNN, масштабирование, деревья, бэггинг, Random Forest, бустинг.
+
+Когда появятся картинки, просто заменяй блоки вида:
+
+```html
+<div class="img-placeholder">img/sigmoid.svg</div>
+```
+
+на:
+
+```html
+<img src="img/sigmoid.svg" alt="График сигмоиды">
+```
+
+Сохрани код ниже как `lecture2.html` и открой в браузере.
+-->
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Занятие 2. Обучение с учителем: классификация и ансамбли</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg1: #0f172a;
+      --bg2: #111827;
+      --panel: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.14);
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #60a5fa;
+      --good: #34d399;
+      --warn: #fbbf24;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: radial-gradient(1200px 700px at 20% 0%, #1d4ed833, transparent),
+                  radial-gradient(1000px 600px at 90% 20%, #0ea5e922, transparent),
+                  linear-gradient(135deg, var(--bg1), var(--bg2));
+      color: var(--text);
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    .hud {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 24px;
+      color: var(--muted);
+      font-size: 14px;
+      background: linear-gradient(to bottom, rgba(2,6,23,0.72), transparent);
+      backdrop-filter: blur(6px);
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: none;
+      padding: 76px 72px 72px;
+      overflow: auto;
+    }
+
+    .slide.active {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 56px;
+      line-height: 1.08;
+      max-width: 1200px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 42px;
+      line-height: 1.12;
+      color: #fff;
+      max-width: 1250px;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: 28px;
+      color: #fff;
+    }
+
+    p, li, td, th {
+      font-size: 24px;
+      line-height: 1.55;
+    }
+
+    ul, ol {
+      margin: 0;
+      padding-left: 28px;
+      max-width: 1250px;
+    }
+
+    li { margin: 10px 0; }
+
+    .subtitle {
+      font-size: 30px;
+      color: var(--muted);
+      max-width: 1100px;
+    }
+
+    .muted { color: var(--muted); }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px;
+      backdrop-filter: blur(8px);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      width: min(1350px, 100%);
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 18px;
+      width: min(1350px, 100%);
+    }
+
+    .card h3 {
+      margin-bottom: 12px;
+    }
+
+    .big-number {
+      font-size: 72px;
+      font-weight: 700;
+      color: var(--accent);
+      margin: 0;
+    }
+
+    .formula {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 30px;
+      background: rgba(230, 230, 231, 0.72);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 22px;
+      width: fit-content;
+    }
+
+    .small {
+      font-size: 19px;
+      color: var(--muted);
+    }
+
+    table {
+      border-collapse: collapse;
+      width: fit-content;
+      min-width: 700px;
+      margin-top: 8px;
+    }
+
+    th, td {
+      border: 1px solid rgba(255,255,255,0.18);
+      padding: 14px 18px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+    }
+
+    pre {
+      margin: 0;
+      background: rgba(233, 233, 235, 0.86);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 18px;
+      padding: 22px;
+      overflow: auto;
+      max-width: 1300px;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 19px;
+      line-height: 1.5;
+      color: #dbeafe;
+      white-space: pre;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      font-size: 18px;
+      margin: 4px 8px 4px 0;
+    }
+
+    .accent { color: var(--accent); }
+    .good { color: var(--good); }
+    .warn { color: var(--warn); }
+
+    .footer-note {
+      margin-top: auto;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    /* Изображения и заглушки */
+    .slide img {
+      display: block;
+      max-width: 100%;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,1);
+    }
+
+    figure.panel {
+      margin: 0;
+      padding: 16px;
+    }
+
+    figcaption {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.4;
+    }
+
+    .img-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 320px;
+      border: 2px dashed rgba(255,255,255,0.28);
+      border-radius: 16px;
+      background: rgba(238, 238, 240, 0.35);
+      color: var(--muted);
+      font-size: 22px;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .img-contain .img-placeholder,
+    .img-contain img {
+      max-height: 56vh;
+      width: 100%;
+      object-fit: contain;
+    }
+
+    .img-contain .img-placeholder {
+      min-height: 56vh;
+    }
+
+    .img-half .img-placeholder,
+    .img-half img {
+      max-height: 42vh;
+      width: 100%;
+      object-fit: contain;
+    }
+
+    .img-half .img-placeholder {
+      min-height: 42vh;
+    }
+
+    .img-small .img-placeholder,
+    .img-small img {
+      max-height: 30vh;
+      width: 100%;
+      object-fit: contain;
+    }
+
+    .img-small .img-placeholder {
+      min-height: 30vh;
+    }
+
+    .img-full .img-placeholder,
+    .img-full img {
+      max-height: 64vh;
+      width: 100%;
+      object-fit: contain;
+    }
+
+    .img-full .img-placeholder {
+      min-height: 64vh;
+    }
+
+    /* Фоновая картинка с затемнением */
+    .slide.bg-image {
+      background-size: cover;
+      background-position: center;
+    }
+
+    .slide.bg-image::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(213, 214, 215, 0.72);
+    }
+
+    .slide.bg-image > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    @media (max-width: 900px) {
+      .slide { padding: 64px 24px 56px; }
+      h1 { font-size: 38px; }
+      h2 { font-size: 30px; }
+      p, li, td, th { font-size: 18px; }
+      .grid, .grid-3 { grid-template-columns: 1fr; }
+      .formula { font-size: 20px; }
+      code { font-size: 14px; }
+      .img-placeholder { font-size: 16px; }
+    }
+    /* ===== ПЕЧАТЬ В PDF ===== */
+    @media print {
+      @page { size: A4 landscape; margin: 0; }
+
+      html, body {
+        margin: 0; padding: 0;
+        background: #10161f;               /* цвет фона слайда, чтобы поля небелились */
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      .hud { display: none !important; }
+
+      .slide {
+        position: relative !important;
+        inset: auto !important;
+        display: flex !important;              /* печатаем ВСЕ слайды */
+        width: 338.67mm;
+        height: 190.5mm;
+        padding: 14mm 20mm;
+        margin: 0;
+        overflow: hidden;
+        break-inside: avoid;
+        break-after: page;
+        page-break-after: always;
+      }
+
+      .slide:last-child {
+        break-after: auto;
+        page-break-after: auto;
+      }
+
+      /* Уменьшаем типографику под лист */
+      h1 { font-size: 34px; }
+      h2 { font-size: 27px; }
+      h3 { font-size: 19px; }
+
+      p, li, td, th {
+        font-size: 15px;
+        line-height: 1.35;
+      }
+
+      .subtitle { font-size: 20px; }
+      .formula  { font-size: 17px; }
+      .small, .footer-note { font-size: 12px; }
+
+      .panel { padding: 12px; }
+      figure.panel { padding: 10px; }
+      .grid, .grid-3 { gap: 12px; }
+
+      th, td { padding: 7px 10px; }
+
+      pre { padding: 10px; }
+      pre code { font-size: 9px; line-height: 1.25; }
+
+      /* Картинки и заглушки */
+      .slide img {
+        max-height: 60mm !important;
+        max-width: 100%;
+        object-fit: contain;
+      }
+
+      .img-placeholder {
+        min-height: 0 !important;
+        height: 45mm;
+        font-size: 12px;
+        border: 1px dashed rgba(255,255,255,0.4);
+      }
+
+      figcaption { font-size: 11px; }
+      .pill { font-size: 12px; padding: 4px 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div>Занятие 2. Обучение с учителем: классификация и ансамбли</div>
+    <div id="counter">1 / 50</div>
+  </div>
+
+  <!-- 1 -->
+  <section class="slide active" id="s1">
+    <h1>Занятие 2. Обучение с учителем: классификация и ансамбли</h1>
+    <p class="subtitle">Логистическая регрессия, метрики, kNN, деревья решений, Random Forest и введение в бустинг</p>
+    <div>
+      <span class="pill">Python</span>
+      <span class="pill">scikit-learn</span>
+      <span class="pill">классификация</span>
+      <span class="pill">метрики</span>
+      <span class="pill">ансамбли</span>
+    </div>
+    <p class="footer-note">Листайте слайды стрелками ← →</p>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide" id="s2">
+    <h2>Цели занятия</h2>
+    <ul>
+      <li>Понять, как формулируются задачи классификации.</li>
+      <li>Разобрать логистическую регрессию как базовый классификатор.</li>
+      <li>Научиться интерпретировать метрики: accuracy, precision, recall, F1.</li>
+      <li>Понять, почему дисбаланс классов меняет выбор метрики.</li>
+      <li>Познакомиться с kNN, деревьями решений и ансамблями.</li>
+      <li>Провести практическое сравнение нескольких моделей.</li>
+    </ul>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide" id="s3">
+    <h2>Программа занятия</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Теория</h3>
+        <ul>
+          <li>Логистическая регрессия и вероятность класса</li>
+          <li>Метрики классификации</li>
+          <li>kNN и масштабирование признаков</li>
+          <li>Деревья решений</li>
+          <li>Бэггинг, Random Forest, бустинг</li>
+        </ul>
+      </div>
+      <div class="panel card">
+        <h3>Практика</h3>
+        <ul>
+          <li>Загрузка данных</li>
+          <li>Разделение train/test</li>
+          <li>Обучение нескольких моделей</li>
+          <li>Сравнение метрик</li>
+          <li>Интерпретация результатов</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide" id="s4">
+    <h2>Повторение: обучение с учителем</h2>
+    <ul>
+      <li>Есть объекты с признаками <span class="accent">X</span>.</li>
+      <li>Есть известные ответы <span class="accent">y</span>.</li>
+      <li>Модель обучается на парах <span class="accent">(X, y)</span>.</li>
+      <li>Цель — предсказывать <span class="accent">y</span> для новых объектов.</li>
+    </ul>
+    <div class="panel">
+      <p class="formula">X → модель → предсказание ŷ</p>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide" id="s5">
+    <h2>Регрессия и классификация</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Регрессия</h3>
+        <ul>
+          <li>Целевая переменная — число.</li>
+          <li>Примеры: цена, спрос, температура.</li>
+          <li>Типичные модели: линейная регрессия.</li>
+        </ul>
+      </div>
+      <div class="panel card">
+        <h3>Классификация</h3>
+        <ul>
+          <li>Целевая переменная — категория или класс.</li>
+          <li>Примеры: спам/не спам, тип ириса, нормальная/аномальная активность.</li>
+          <li>Типичные модели: логистическая регрессия, kNN, деревья.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide" id="s6">
+    <h2>Пример задачи классификации</h2>
+    <div class="panel">
+      <p><strong>Задача:</strong> определить тип цветка по измерениям.</p>
+      <table>
+        <tr>
+          <th>Длина лепестка</th>
+          <th>Ширина лепестка</th>
+          <th>Длина чашелистика</th>
+          <th>Ширина чашелистика</th>
+          <th>Класс</th>
+        </tr>
+        <tr>
+          <td>5.1</td><td>3.5</td><td>1.4</td><td>0.2</td><td>setosa</td>
+        </tr>
+        <tr>
+          <td>6.7</td><td>3.0</td><td>5.2</td><td>2.3</td><td>virginica</td>
+        </tr>
+      </table>
+    </div>
+    <p class="muted">Здесь признаки — числовые измерения, а целевая переменная — класс.</p>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide" id="s7">
+    <h2>Логистическая регрессия: идея</h2>
+    <ul>
+      <li>Несмотря на название, это модель классификации.</li>
+      <li>Сначала считается линейная оценка:</li>
+    </ul>
+    <div class="panel">
+      <p class="formula">z = w1*x1 + w2*x2 + ... + b</p>
+    </div>
+    <ul>
+      <li>Затем эта оценка преобразуется в вероятность класса.</li>
+    </ul>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide" id="s8">
+    <h2>От линейной оценки к вероятности</h2>
+    <ul>
+      <li>Линейный выход <span class="accent">z</span> может быть любым числом.</li>
+      <li>Вероятность должна быть в диапазоне от 0 до 1.</li>
+      <li>Поэтому используют сигмоиду.</li>
+    </ul>
+    <div class="panel">
+      <p class="formula">p = 1 / (1 + e^-z)</p>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide" id="s9">
+    <h2>Сигмоида</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Что делает сигмоида</h3>
+        <ul>
+          <li>Сжимает числовую оценку в вероятность.</li>
+          <li>Отрицательный <span class="accent">z</span> → вероятность около 0.</li>
+          <li>Положительный <span class="accent">z</span> → вероятность около 1.</li>
+        </ul>
+        <div class="formula">p = 1 / (1 + e^-z)</div>
+      </div>
+
+      <figure class="panel img-contain">
+        <img src="img/sigmoid.svg" alt="График сигмоиды">
+        <figcaption>График сигмоиды: по горизонтали z, по вертикали вероятность</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide" id="s10">
+    <h2>Вероятность класса</h2>
+    <ul>
+      <li>Логистическая регрессия может возвращать вероятность:</li>
+    </ul>
+    <div class="panel">
+      <p class="formula">P(y = 1 | X)</p>
+    </div>
+    <ul>
+      <li>Например, <span class="accent">p = 0.82</span> означает: модель считает, что объект с вероятностью 82% относится к положительному классу.</li>
+      <li>Чтобы получить класс, нужно выбрать порог.</li>
+    </ul>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide" id="s11">
+    <h2>Порог классификации</h2>
+    <ul>
+      <li>По умолчанию часто используют порог 0.5.</li>
+    </ul>
+    <div class="panel">
+      <p class="formula">p >= 0.5 → класс 1</p>
+      <p class="formula">p &lt; 0.5 → класс 0</p>
+    </div>
+    <ul>
+      <li>Но порог можно менять в зависимости от задачи.</li>
+    </ul>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide" id="s12">
+    <h2>Как выбирают порог</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Если дорого пропустить событие</h3>
+        <ul>
+          <li>Можно снизить порог.</li>
+          <li>Больше срабатываний.</li>
+          <li>Выше recall.</li>
+        </ul>
+      </div>
+      <div class="panel card">
+        <h3>Если дорого ложное срабатывание</h3>
+        <ul>
+          <li>Можно повысить порог.</li>
+          <li>Меньше ложных тревог.</li>
+          <li>Выше precision.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide" id="s13">
+    <h2>Логистическая регрессия: плюсы и минусы</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Плюсы</h3>
+        <ul>
+          <li>Простая и быстрая модель.</li>
+          <li>Возвращает вероятности.</li>
+          <li>Хорошая отправная точка.</li>
+          <li>Коэффициенты можно интерпретировать.</li>
+        </ul>
+      </div>
+      <div class="panel card">
+        <h3>Минусы</h3>
+        <ul>
+          <li>Линейная граница решения.</li>
+          <li>Может плохо ловить сложные зависимости.</li>
+          <li>Чувствительна к качеству признаков.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide" id="s14">
+    <h2>Метрики классификации: зачем они нужны</h2>
+    <ul>
+      <li>Недостаточно просто обучить модель.</li>
+      <li>Нужно понять, насколько хорошо она решает задачу.</li>
+      <li>Разные ошибки имеют разную цену.</li>
+      <li>Метрика должна соответствовать бизнес-логике или требованиям безопасности.</li>
+    </ul>
+    <div class="panel">
+      <p>Одна и та же модель может выглядеть хорошей или плохой в зависимости от выбранной метрики.</p>
+    </div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide" id="s15">
+    <h2>Матрица ошибок</h2>
+    <div class="grid">
+      <div class="panel">
+        <table>
+          <tr>
+            <th></th>
+            <th>Фактический класс 1</th>
+            <th>Фактический класс 0</th>
+          </tr>
+          <tr>
+            <th>Предсказан класс 1</th>
+            <td>True Positive (TP)</td>
+            <td>False Positive (FP)</td>
+          </tr>
+          <tr>
+            <th>Предсказан класс 0</th>
+            <td>False Negative (FN)</td>
+            <td>True Negative (TN)</td>
+          </tr>
+        </table>
+      </div>
+
+      <figure class="panel img-contain">
+        <img src="img/confusion_matrix.png" alt="Матрица спутанности">
+        <figcaption>Визуализация матрицы ошибок: можно показать доли или числа</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 16 -->
+  <section class="slide" id="s16">
+    <h2>TP, FP, FN, TN</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>TP</h3>
+        <p>Модель сказала «1», и факт был «1».</p>
+      </div>
+      <div class="panel card">
+        <h3>FP</h3>
+        <p>Модель сказала «1», но факт был «0». Ложная тревога.</p>
+      </div>
+      <div class="panel card">
+        <h3>FN</h3>
+        <p>Модель сказала «0», но факт был «1». Пропуск события.</p>
+      </div>
+      <div class="panel card">
+        <h3>TN</h3>
+        <p>Модель сказала «0», и факт был «0».</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 17 -->
+  <section class="slide" id="s17">
+    <h2>Accuracy</h2>
+    <div class="panel">
+      <p class="formula">accuracy = (TP + TN) / (TP + FP + FN + TN)</p>
+    </div>
+    <ul>
+      <li>Доля правильных ответов модели.</li>
+      <li>Простая и понятная метрика.</li>
+      <li>Хорошо работает, когда классы сбалансированы.</li>
+      <li>Может обманывать при сильном дисбалансе классов.</li>
+    </ul>
+  </section>
+
+  <!-- 18 -->
+  <section class="slide" id="s18">
+    <h2>Precision</h2>
+    <div class="panel">
+      <p class="formula">precision = TP / (TP + FP)</p>
+    </div>
+    <ul>
+      <li>Показывает, насколько можно доверять положительным прогнозам.</li>
+      <li>Если модель сказала «1», как часто это действительно «1»?</li>
+      <li>Важна, когда ложные срабатывания дороги.</li>
+    </ul>
+  </section>
+
+  <!-- 19 -->
+  <section class="slide" id="s19">
+    <h2>Recall</h2>
+    <div class="panel">
+      <p class="formula">recall = TP / (TP + FN)</p>
+    </div>
+    <ul>
+      <li>Показывает, какую долю реальных положительных случаев нашла модель.</li>
+      <li>Важна, когда дорого пропустить событие.</li>
+      <li>Пример: поиск атак, мошенничества, опасных событий.</li>
+    </ul>
+  </section>
+
+  <!-- 20 -->
+  <section class="slide" id="s20">
+    <h2>F1-score</h2>
+    <div class="panel">
+      <p class="formula">F1 = 2 * precision * recall / (precision + recall)</p>
+    </div>
+    <ul>
+      <li>Баланс между precision и recall.</li>
+      <li>Полезен, когда важны и ложные срабатывания, и пропуски.</li>
+      <li>Часто используется при дисбалансе классов.</li>
+    </ul>
+  </section>
+
+  <!-- 21 -->
+  <section class="slide" id="s21">
+    <h2>Как читать метрики</h2>
+    <div class="panel">
+      <table>
+        <tr>
+          <th>Метрика</th>
+          <th>Вопрос</th>
+        </tr>
+        <tr>
+          <td>Accuracy</td>
+          <td>Насколько часто модель права в целом?</td>
+        </tr>
+        <tr>
+          <td>Precision</td>
+          <td>Насколько надежны тревоги модели?</td>
+        </tr>
+        <tr>
+          <td>Recall</td>
+          <td>Насколько полно модель находит важные события?</td>
+        </tr>
+        <tr>
+          <td>F1</td>
+          <td>Каков баланс между надежностью и полнотой?</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 22 -->
+  <section class="slide" id="s22">
+    <h2>Пример выбора метрики</h2>
+    <div class="grid-3">
+      <div class="panel card">
+        <h3>Спам-фильтр</h3>
+        <p>Важно не удалить нормальное письмо. Часто смотрят на ложные срабатывания и точность.</p>
+      </div>
+      <div class="panel card">
+        <h3>Поиск атак</h3>
+        <p>Важно не пропустить атаку. Часто важен высокий recall.</p>
+      </div>
+      <div class="panel card">
+        <h3>Медицинская диагностика</h3>
+        <p>Цена ошибки высока. Баланс метрик зависит от последствий пропуска и ложной тревоги.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 23 -->
+  <section class="slide" id="s23">
+    <h2>Дисбаланс классов</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Проблема</h3>
+        <ul>
+          <li>Одного класса сильно больше, чем другого.</li>
+          <li>Пример: 99% нормальных событий и 1% аномалий.</li>
+          <li>Модель может всегда отвечать «0» и получать 99% accuracy.</li>
+          <li>Но полезность такой модели близка к нулю.</li>
+        </ul>
+      </div>
+
+      <figure class="panel img-contain">
+        <img src="img/class_imabalance.png" alt="Дисбаланс классов">
+        <figcaption>Например, столбики: 0.2% класс 0 и 99% класс 1</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 24 -->
+  <section class="slide" id="s24">
+    <h2>Метрики при дисбалансе</h2>
+    <ul>
+      <li>Precision</li>
+      <li>Recall</li>
+      <li>F1-score</li>
+      <li>PR-AUC</li>
+      <li>Матрица ошибок</li>
+    </ul>
+    <div class="panel">
+      <p>Если целевой класс редкий, лучше оценивать модель именно по этим метрикам.</p>
+    </div>
+  </section>
+
+  <!-- 25 -->
+  <section class="slide" id="s25">
+    <h2>Кратко про ROC-AUC и PR-AUC</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>ROC-AUC</h3>
+        <ul>
+          <li>Оценивает качество вероятностей модели.</li>
+          <li>Показывает, насколько хорошо модель разделяет классы.</li>
+          <li>Часто полезна при умеренном дисбалансе.</li>
+        </ul>
+      </div>
+      <div class="panel card">
+        <h3>PR-AUC</h3>
+        <ul>
+          <li>Кривая precision-recall.</li>
+          <li>Часто полезнее при сильном дисбалансе.</li>
+          <li>Фокусируется на качестве предсказания редкого класса.</li>
+        </ul>
+      </div>
+    </div>
+
+    <figure class="panel img-half">
+      <img src="img/roc_pr_curves.webp" alt="ROC-AUC и PR-AUC">
+      <figcaption>Слева — ROC-кривая, справа — PR-кривая</figcaption>
+    </figure>
+  </section>
+
+  <!-- 26 -->
+  <section class="slide" id="s26">
+    <h2>kNN: идея</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Основная мысль</h3>
+        <ul>
+          <li>kNN — метод k ближайших соседей.</li>
+          <li>Идея: объект похож на свои ближайшие соседи.</li>
+          <li>Для классификации класс определяется голосованием соседей.</li>
+        </ul>
+        <div class="formula">класс = голосование k ближайших объектов</div>
+      </div>
+
+      <figure class="panel img-contain">
+        <img src="img/knn_idea.png" alt="kNN">
+        <figcaption>Новая точка и её ближайшие соседи на плоскости признаков</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 27 -->
+  <section class="slide" id="s27">
+    <h2>Как работает kNN</h2>
+    <ol>
+      <li>Выбираем число соседей <span class="accent">k</span>.</li>
+      <li>Для нового объекта находим ближайшие обучающие объекты.</li>
+      <li>Смотрим их классы.</li>
+      <li>Присваиваем новый объект классу, который чаще встречается среди соседей.</li>
+    </ol>
+  </section>
+
+  <!-- 28 -->
+  <section class="slide" id="s28">
+    <h2>Выбор k</h2>
+    <div class="grid">
+      <figure class="panel img-half">
+        <img src="img/knn_1.png" alt="kNN, k = 1">
+        <figcaption>k = 1: граница изрезанная, риск переобучения</figcaption>
+      </figure>
+
+      <figure class="panel img-half">
+        <img src="img/knn_100.jpg" alt="kNN, k = 100">
+        <figcaption>k = 10: граница более сглаженная</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 29 -->
+  <section class="slide" id="s29">
+    <h2>Расстояния и масштаб признаков</h2>
+    <ul>
+      <li>kNN использует расстояния между объектами.</li>
+      <li>Если один признак измеряется тысячами, а другой — долями единицы, первый будет доминировать.</li>
+      <li>Поэтому признаки часто нужно масштабировать.</li>
+    </ul>
+    <div class="panel">
+      <p>Для kNN масштабирование признаков особенно важно.</p>
+    </div>
+  </section>
+
+  <!-- 30 -->
+  <section class="slide" id="s30">
+    <h2>Масштабирование признаков</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Зачем</h3>
+        <ul>
+          <li>Привести признаки к сопоставимому масштабу.</li>
+          <li>Помочь моделям, основанным на расстояниях.</li>
+          <li>Улучшить численную устойчивость и интерпретируемость.</li>
+        </ul>
+
+        <div class="grid">
+          <div class="panel card">
+            <h3>Пример до</h3>
+            <p>зарплата: 120000</p>
+            <p>возраст: 35</p>
+          </div>
+          <div class="panel card">
+            <h3>Пример после</h3>
+            <p>зарплата: 0.62</p>
+            <p>возраст: -0.18</p>
+          </div>
+        </div>
+      </div>
+
+      <figure class="panel img-contain">
+        <img src="img/feature_scaling.jpg" alt="Raw vs. scaled features">
+        <figcaption>Схема: признаки до масштабирования и после</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 31 -->
+  <section class="slide" id="s31">
+    <h2>StandardScaler и MinMaxScaler</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>StandardScaler</h3>
+        <ul>
+          <li>Приводит признаки к среднему 0 и стандартному отклонению 1.</li>
+          <li>Хорош для многих моделей.</li>
+        </ul>
+      </div>
+      <div class="panel card">
+        <h3>MinMaxScaler</h3>
+        <ul>
+          <li>Масштабирует признаки в диапазон, например от 0 до 1.</li>
+          <li>Чувствителен к выбросам.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 32 -->
+  <section class="slide" id="s32">
+    <h2>Деревья решений: идея</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Как думать о дереве</h3>
+        <ul>
+          <li>Дерево последовательно задает вопросы о признаках.</li>
+          <li>Каждый вопрос делит объекты на группы.</li>
+          <li>В листьях дерева находится предсказание класса.</li>
+        </ul>
+        <div class="formula">если признак > порог → ветка 1, иначе → ветка 0</div>
+      </div>
+
+      <figure class="panel img-contain">
+        <img src="img/decision_tree.webp" alt="Raw vs. scaled features">
+        <figcaption>Пример дерева решений с вопросами и листьями</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 33 -->
+  <section class="slide" id="s33">
+    <h2>Как дерево делает разбиения</h2>
+    <ol>
+      <li>Дерево выбирает признак.</li>
+      <li>Выбирает порог.</li>
+      <li>Делит данные на две части.</li>
+      <li>Повторяет процесс для получившихся групп.</li>
+      <li>Останавливается по критерию или ограничению.</li>
+    </ol>
+  </section>
+
+  <!-- 34 -->
+  <section class="slide" id="s34">
+    <h2>Критерии качества разбиения</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Gini impurity</h3>
+        <p>Оценивает вероятность ошибочной классификации объекта внутри узла.</p>
+      </div>
+      <div class="panel card">
+        <h3>Entropy</h3>
+        <p>Оценивает неопределенность распределения классов в узле.</p>
+      </div>
+    </div>
+    <p class="muted">Оба критерия помогают дереву выбирать более «чистые» разбиения.</p>
+  </section>
+
+  <!-- 35 -->
+  <section class="slide" id="s35">
+    <h2>Глубина дерева и переобучение</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Слишком глубокое</h3>
+        <ul>
+          <li>Запоминает обучающие данные.</li>
+          <li>Хорошо работает на обучении.</li>
+          <li>Плохо обобщает на тесте.</li>
+        </ul>
+
+        <h3>Слишком мелкое</h3>
+        <ul>
+          <li>Не улавливает закономерности.</li>
+          <li>Может недообучаться.</li>
+        </ul>
+
+        <p class="muted">Глубина — важный гиперпараметр дерева.</p>
+      </div>
+
+      <figure class="panel img-contain">
+        <img src="img/tree_overfitting.png" alt="Переобученное дерево">
+        <figcaption>Иллюстрация: недообучение, баланс, переобучение</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 36 -->
+  <section class="slide" id="s36">
+    <h2>Важность признаков</h2>
+    <ul>
+      <li>Деревья могут показывать, какие признаки сильнее влияют на разбиения.</li>
+      <li>Это помогает интерпретировать модель.</li>
+      <li>Но важность признаков нужно интерпретировать осторожно.</li>
+      <li>Корреляция признаков может искажать картину.</li>
+    </ul>
+  </section>
+
+  <!-- 37 -->
+  <section class="slide" id="s37">
+    <h2>Деревья: плюсы и минусы</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Плюсы</h3>
+        <ul>
+          <li>Понятная логика решений.</li>
+          <li>Не требуют обязательного масштабирования.</li>
+          <li>Могут работать с нелинейными зависимостями.</li>
+        </ul>
+      </div>
+      <div class="panel card">
+        <h3>Минусы</h3>
+        <ul>
+          <li>Склонны к переобучению.</li>
+          <li>Могут быть нестабильными.</li>
+          <li>Небольшие изменения данных могут менять дерево.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 38 -->
+  <section class="slide" id="s38">
+    <h2>Ансамбли моделей</h2>
+    <ul>
+      <li>Ансамбль — это несколько моделей, которые работают вместе.</li>
+      <li>Идея: несколько слабых или разных моделей могут дать лучший результат, чем одна.</li>
+      <li>Ансамбли часто снижают дисперсию и улучшают обобщение.</li>
+    </ul>
+    <div class="panel">
+      <p>Одно дерево может ошибаться. Группа деревьев может быть устойчивее.</p>
+    </div>
+  </section>
+
+  <!-- 39 -->
+  <section class="slide" id="s39">
+    <h2>Бэггинг</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Идея</h3>
+        <ul>
+          <li>Bagging = bootstrap aggregating.</li>
+          <li>Каждая базовая модель обучается на своей подвыборке данных.</li>
+          <li>Затем предсказания усредняются или выбираются голосованием.</li>
+          <li>Помогает снизить разброс модели.</li>
+        </ul>
+        <div class="formula">много моделей на подвыборках → агрегация ответов</div>
+      </div>
+
+      <figure class="panel img-contain">
+        <img src="img/bagging.webp" alt="Бэггинг: разделяем и обучем отдельные модели">
+        <figcaption>Схема бэггинга: разные подвыборки, разные модели, агрегация</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 40 -->
+  <section class="slide" id="s40">
+    <h2>Random Forest</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Как устроен</h3>
+        <ul>
+          <li>Random Forest — ансамбль деревьев решений.</li>
+          <li>Каждое дерево обучается на случайной подвыборке объектов.</li>
+          <li>При разбиениях также используется случайный подмножество признаков.</li>
+          <li>Итоговый класс выбирается голосованием деревьев.</li>
+        </ul>
+        <p class="muted">Random Forest часто является сильной моделью по умолчанию для табличных данных.</p>
+      </div>
+
+      <figure class="panel img-contain">
+        <img src="img/random_forest.webp" alt="Случайный лес: бэггинг для деревьев">
+        <figcaption>Схема Random Forest: много деревьев и голосование</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 41 -->
+  <section class="slide" id="s41">
+    <h2>Гиперпараметры Random Forest</h2>
+    <ul>
+      <li><span class="accent">n_estimators</span> — число деревьев.</li>
+      <li><span class="accent">max_depth</span> — максимальная глубина деревьев.</li>
+      <li><span class="accent">min_samples_split</span> — минимальное число объектов для разбиения.</li>
+      <li><span class="accent">min_samples_leaf</span> — минимальное число объектов в листе.</li>
+      <li><span class="accent">max_features</span> — число признаков, рассматриваемых при разбиении.</li>
+    </ul>
+  </section>
+
+  <!-- 42 -->
+  <section class="slide" id="s42">
+    <h2>Бустинг: идея</h2>
+    <ul>
+      <li>Бустинг строит модели последовательно.</li>
+      <li>Каждая новая модель старается исправить ошибки предыдущих.</li>
+      <li>Итоговый прогноз — взвешенная комбинация моделей.</li>
+    </ul>
+    <div class="panel">
+      <p class="formula">модель 1 → исправляем ошибки → модель 2 → исправляем ошибки → модель 3 ...</p>
+    </div>
+  </section>
+
+  <!-- 43 -->
+  <section class="slide" id="s43">
+    <h2>Градиентный бустинг</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Основная идея</h3>
+        <ul>
+          <li>Новые модели обучаются на остатках или градиентах ошибки.</li>
+          <li>Метод часто дает высокое качество на табличных данных.</li>
+          <li>Требует аккуратной настройки гиперпараметров.</li>
+          <li>Может переобучаться, если обучать слишком долго.</li>
+        </ul>
+      </div>
+
+      <figure class="panel img-contain">
+        <img src="img/gradient_boosting.png" alt="Случайный лес: бэггинг для деревьев">
+        <figcaption>Схема градиентного бустинга: последовательное исправление ошибок</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 44 -->
+  <section class="slide" id="s44">
+    <h2>Популярные реализации бустинга</h2>
+    <div class="grid-3">
+      <div class="panel card">
+        <h3>XGBoost</h3>
+        <p>Быстрый и популярный градиентный бустинг.</p>
+      </div>
+      <div class="panel card">
+        <h3>LightGBM</h3>
+        <p>Часто эффективен на больших табличных данных.</p>
+      </div>
+      <div class="panel card">
+        <h3>CatBoost</h3>
+        <p>Удобен для данных с категориальными признаками.</p>
+      </div>
+    </div>
+    <p class="muted">В рамках первого знакомства достаточно понимать идею и видеть пример работы.</p>
+  </section>
+
+  <!-- 45 -->
+  <section class="slide" id="s45">
+    <h2>Практика: постановка эксперимента</h2>
+    <ul>
+      <li>Берем один датасет классификации.</li>
+      <li>Разделяем данные на обучение и тест.</li>
+      <li>Обучаем несколько моделей.</li>
+      <li>Делаем предсказания на тестовой выборке.</li>
+      <li>Сравниваем качество по одинаковым метрикам.</li>
+    </ul>
+    <div class="panel">
+      <p>Модели для сравнения: логистическая регрессия, kNN, дерево решений, Random Forest.</p>
+    </div>
+  </section>
+
+  <!-- 46 -->
+  <section class="slide" id="s46">
+    <h2>Рекомендуемые датасеты</h2>
+    <div class="grid-3">
+      <div class="panel card">
+        <h3>Iris</h3>
+        <p>Простой многоклассовый датасет. Хорош для первого знакомства.</p>
+      </div>
+      <div class="panel card">
+        <h3>Wine</h3>
+        <p>Больше признаков, тоже многоклассовая классификация.</p>
+      </div>
+      <div class="panel card">
+        <h3>Breast Cancer</h3>
+        <p>Бинарная классификация, удобен для обсуждения метрик.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 47 -->
+  <section class="slide" id="s47">
+    <h2>Типовой pipeline сравнения</h2>
+    <ol>
+      <li>Загрузить данные.</li>
+      <li>Выделить признаки <span class="accent">X</span> и целевую переменную <span class="accent">y</span>.</li>
+      <li>Разделить на <span class="accent">train</span> и <span class="accent">test</span>.</li>
+      <li>При необходимости масштабировать признаки.</li>
+      <li>Обучить модели.</li>
+      <li>Получить предсказания.</li>
+      <li>Посчитать метрики.</li>
+    </ol>
+  </section>
+
+  <!-- 48 -->
+  <section class="slide" id="s48">
+    <h2>Пример кода: сравнение моделей</h2>
+    <pre><code>from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, f1_score, classification_report
+
+X, y = load_breast_cancer(return_X_y=True)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, random_state=42
+)
+
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+models = {
+    "LogReg": LogisticRegression(max_iter=1000, random_state=42),
+    "kNN": KNeighborsClassifier(n_neighbors=5),
+    "Tree": DecisionTreeClassifier(max_depth=4, random_state=42),
+    "RandomForest": RandomForestClassifier(n_estimators=200, random_state=42),
+}
+
+for name, model in models.items():
+    if name == "kNN" or name == "LogReg":
+        model.fit(X_train_scaled, y_train)
+        preds = model.predict(X_test_scaled)
+    else:
+        model.fit(X_train, y_train)
+        preds = model.predict(X_test)
+
+    print(name)
+    print("accuracy:", accuracy_score(y_test, preds))
+    print("f1:", f1_score(y_test, preds))
+    print(classification_report(y_test, preds))</code></pre>
+  </section>
+
+  <!-- 49 -->
+  <section class="slide" id="s49">
+    <h2>Интерпретация результатов</h2>
+    <ul>
+      <li>Сравниваем модели только на тестовой выборке.</li>
+      <li>Смотрим не только на accuracy, но и на precision, recall, F1.</li>
+      <li>Проверяем, не переобучилось ли дерево.</li>
+      <li>Смотрим, помогает ли масштабирование для kNN и логистической регрессии.</li>
+      <li>Оцениваем, соответствует ли метрика задаче.</li>
+    </ul>
+    <div class="panel">
+      <p>Хороший результат — не только высокая метрика, но и понимание, почему модель так работает.</p>
+    </div>
+  </section>
+
+  <!-- 50 -->
+  <section class="slide" id="s50">
+    <h2>Итоги и связь с MLSecOps</h2>
+    <ul>
+      <li>Логистическая регрессия — сильная базовая модель для классификации.</li>
+      <li>Метрика должна соответствовать цене ошибок.</li>
+      <li>kNN требует масштабирования признаков.</li>
+      <li>Деревья интерпретируемы, но склонны к переобучению.</li>
+      <li>Random Forest часто улучшает устойчивость и качество.</li>
+      <li>Бустинг может дать высокий результат, но требует аккуратности.</li>
+    </ul>
+    <div class="panel">
+      <p><strong>Для MLSecOps важно:</strong> контролировать качество данных, воспроизводимость обучения, корректность валидации и поведение модели в эксплуатации.</p>
+    </div>
+  </section>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const counter = document.getElementById('counter');
+    let current = 0;
+
+    function show(index) {
+      current = Math.max(0, Math.min(index, slides.length - 1));
+      slides.forEach((slide, i) => {
+        slide.classList.toggle('active', i === current);
+      });
+      counter.textContent = `${current + 1} / ${slides.length}`;
+      history.replaceState(null, '', `#${current + 1}`);
+    }
+
+    function next() {
+      show(current + 1);
+    }
+
+    function prev() {
+      show(current - 1);
+    }
+
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') {
+        event.preventDefault();
+        next();
+      } else if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+        event.preventDefault();
+        prev();
+      } else if (event.key === 'Home') {
+        event.preventDefault();
+        show(0);
+      } else if (event.key === 'End') {
+        event.preventDefault();
+        show(slides.length - 1);
+      }
+    });
+
+    const initialHash = parseInt(location.hash.replace('#', ''), 10);
+    if (!Number.isNaN(initialHash)) {
+      show(initialHash - 1);
+    } else {
+      show(0);
+    }
+  </script>
+</body>
+</html>
