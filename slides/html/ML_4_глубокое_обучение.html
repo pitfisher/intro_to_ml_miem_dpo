@@ -1,0 +1,1129 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Занятие 4. Глубокое обучение: от нейрона к нейросети</title>
+
+  <!-- KaTeX: настоящий рендеринг формул -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$',  right: '$$',  display: true  },
+            { left: '\\[', right: '\\]', display: true  },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false
+        });
+        window.__MATH_DONE__ = true;   // флажок для headless-печати (Playwright)
+      }
+    });
+  </script>
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg1: #0f172a;
+      --bg2: #111827;
+      --panel: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.14);
+      --text: #fbfdff;
+      --muted: #94a3b8;
+      --accent: #60a5fa;
+      --good: #34d399;
+      --warn: #fbbf24;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: radial-gradient(1200px 700px at 20% 0%, #1d4ed833, transparent),
+                  radial-gradient(1000px 600px at 90% 20%, #0ea5e922, transparent),
+                  linear-gradient(135deg, var(--bg1), var(--bg2));
+      color: var(--text);
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    .hud {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 24px;
+      color: var(--muted);
+      font-size: 14px;
+      background: linear-gradient(to bottom, rgba(2,6,23,0.72), transparent);
+      backdrop-filter: blur(6px);
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: none;
+      padding: 76px 72px 72px;
+      overflow: auto;
+    }
+
+    .slide.active {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 18px;
+    }
+
+    h1 { margin: 0; font-size: 54px; line-height: 1.08; max-width: 1200px; }
+    h2 { margin: 0; font-size: 42px; line-height: 1.12; color: #fff; max-width: 1250px; }
+    h3 { margin: 0; font-size: 28px; color: #fff; }
+
+    p, li, td, th { font-size: 24px; line-height: 1.55; }
+
+    ul, ol { margin: 0; padding-left: 28px; max-width: 1250px; }
+    li { margin: 10px 0; }
+
+    .subtitle { font-size: 30px; color: var(--muted); max-width: 1100px; }
+    .muted { color: var(--muted); }
+    .small { font-size: 19px; color: var(--muted); }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px;
+      backdrop-filter: blur(8px);
+    }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: min(1350px, 100%); }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; width: min(1350px, 100%); }
+
+    .card h3 { margin-bottom: 12px; }
+
+    /* Формулы: KaTeX наследует размер и цвет окружения */
+    .formula {
+      background: rgba(72, 190, 176, 0.558);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 22px;
+      width: fit-content;
+      font-family: inherit;
+      text-align: center;
+      font-size: 30px;
+      color: var(--text);
+    }
+    .katex { font-size: 1.08em; }
+    .katex-display { margin: 0.4em 0; }
+
+    table { border-collapse: collapse; width: fit-content; min-width: 700px; margin-top: 8px; }
+    th, td { border: 1px solid rgba(255,255,255,0.18); padding: 14px 18px; text-align: left; vertical-align: top; }
+    th { background: rgba(255,255,255,0.08); color: #fff; }
+
+    pre {
+      margin: 0;
+      background: rgba(72, 190, 176, 0.558);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 18px;
+      padding: 22px;
+      overflow: auto;
+      max-width: 1300px;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 19px;
+      line-height: 1.5;
+      color: #dbeafe;
+      white-space: pre;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      font-size: 18px;
+      margin: 4px 8px 4px 0;
+    }
+
+    .accent { color: var(--accent); }
+    .good { color: var(--good); }
+    .warn { color: var(--warn); }
+
+    .footer-note { margin-top: auto; color: var(--muted); font-size: 18px; }
+
+    /* Изображения и заглушки */
+    .slide img {
+      display: block;
+      max-width: 100%;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255, 255, 255, 1);
+    }
+    figure.panel { margin: 0; padding: 16px; }
+    figcaption { margin-top: 10px; color: var(--muted); font-size: 18px; line-height: 1.4; }
+
+    .img-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 320px;
+      border: 2px dashed rgba(255,255,255,0.28);
+      border-radius: 16px;
+      background: rgba(238, 238, 240, 0.35);
+      color: var(--bg1);
+      font-size: 22px;
+      text-align: center;
+      padding: 20px;
+    }
+    .img-contain .img-placeholder, .img-contain img { max-height: 56vh; width: 100%; object-fit: contain; }
+    .img-contain .img-placeholder { min-height: 56vh; }
+    .img-half .img-placeholder, .img-half img { max-height: 42vh; width: 100%; object-fit: contain; }
+    .img-half .img-placeholder { min-height: 42vh; }
+    .img-small .img-placeholder, .img-small img { max-height: 30vh; width: 100%; object-fit: contain; }
+    .img-small .img-placeholder { min-height: 30vh; }
+
+    .slide.bg-image::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(213, 214, 215, 0.72);
+    }
+
+    .slide.bg-image > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    @media (max-width: 900px) {
+      .slide { padding: 64px 24px 56px; }
+      h1 { font-size: 36px; }
+      h2 { font-size: 30px; }
+      p, li, td, th { font-size: 18px; }
+      .grid, .grid-3 { grid-template-columns: 1fr; }
+      .formula { font-size: 20px; }
+      code { font-size: 14px; }
+      .img-placeholder { font-size: 16px; }
+    }
+
+    /* ===== ПЕЧАТЬ В PDF (исправленная версия) ===== */
+    /* Страница PDF = ровно размер слайда 1280x720 px (16:9) */
+    @page {
+      size: 338.67mm 190.5mm;
+      margin: 0;
+    }
+
+    @media print {
+      /* ГЛАВНОЕ: снимаем экранные ограничения, иначе всё обрежется до 1 листа */
+      html, body {
+        height: auto !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: (72, 190, 176, 0.558) !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      /* Скрываем весь служебный UI */
+      .hud, .pager, .nav, .controls, .progress { display: none !important; }
+
+      /* Каждый слайд = одна страница, колоночная раскладка как на экране */
+      .slide,
+      .slide.active {
+        position: relative !important;
+        inset: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: flex-start !important;
+        gap: 18px !important;
+        width: 338.67mm !important;
+        height: 190.5mm !important;
+        padding: 14mm 20mm !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        background: linear-gradient(135deg, var(--bg1), var(--bg2)) !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        break-after: page !important;
+        page-break-after: always !important;
+      }
+      .slide:last-of-type {
+        break-after: auto !important;
+        page-break-after: auto !important;
+      }
+
+      /* Типографика под лист */
+      h1 { font-size: 40px; }
+      h2 { font-size: 32px; }
+      h3 { font-size: 22px; }
+      p, li, td, th { font-size: 17px; line-height: 1.4; }
+      .subtitle { font-size: 23px; }
+      .small, .footer-note { font-size: 14px; }
+      .panel { padding: 14px; }
+      figure.panel { padding: 12px; }
+      .grid, .grid-3 { gap: 14px; }
+      th, td { padding: 8px 12px; }
+
+      pre {
+        background: rgba(72, 190, 176, 0.558) !important;
+      }
+      pre code { font-size: 11px; line-height: 1.35; color: #f4f9ff !important; }
+
+      /* Формулы: читаемость и запрет разрыва между страницами */
+      .formula {
+        font-size: 19px;
+        background: rgba(72, 190, 176, 0.558) !important;
+        color: var(--text) !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      .katex-display {
+        margin: 0.35em 0;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      /* Картинки и заглушки */
+      .slide img { max-height: 120mm !important; max-width: 100%; object-fit: contain; }
+      .img-placeholder {
+        min-height: 0 !important;
+        height: 80mm;
+        font-size: 14px;
+        background: rgba(2,6,23,0.35) !important;
+        border: 1px dashed rgba(255,255,255,0.4);
+      }
+      figcaption { font-size: 13px; }
+      .pill { font-size: 13px; padding: 4px 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div>Занятие 4. Глубокое обучение: от нейрона к нейросети</div>
+    <div id="counter">1 / 50</div>
+  </div>
+
+  <!-- 1 -->
+  <section class="slide active" id="s1">
+    <h1>Занятие 4. Глубокое обучение: от нейрона к нейросети</h1>
+    <p class="subtitle">Нейросети, обратное распространение, регуляризация, свёрточные сети и автоэнкодеры — с прицелом на задачи безопасности</p>
+    <div>
+      <span class="pill">нейрон</span>
+      <span class="pill">MLP</span>
+      <span class="pill">backprop</span>
+      <span class="pill">CNN</span>
+      <span class="pill">автоэнкодер</span>
+    </div>
+    <p class="footer-note">Листайте слайды стрелками ← →</p>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide" id="s2">
+    <h2>Цели занятия</h2>
+    <ul>
+      <li>Понять устройство нейрона и многослойной сети: прямое распространение.</li>
+      <li>Разобрать обучение: функция потерь, градиент, обратное распространение, SGD.</li>
+      <li>Знать практические приёмы: learning rate, регуляризация, BatchNorm, инициализация.</li>
+      <li>Обзорно познакомиться с CNN, RNN/трансформерами и автоэнкодерами.</li>
+      <li>Понять, где глубокое обучение применимо в задачах безопасности и каковы его пределы.</li>
+    </ul>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide" id="s3">
+    <h2>Программа занятия</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Теория</h3>
+        <ul>
+          <li>Нейрон, активации, архитектура MLP</li>
+          <li>Потери, градиентный спуск, backprop</li>
+          <li>Регуляризация и устойчивое обучение</li>
+          <li>CNN, RNN, трансформеры — обзорно</li>
+          <li>Автоэнкодеры и adversarial-риски</li>
+        </ul>
+      </div>
+      <div class="panel card">
+        <h3>Практика</h3>
+        <ul>
+          <li>MLPClassifier на данных digits</li>
+          <li>Цикл обучения на PyTorch</li>
+          <li>Автоэнкодер для поиска аномалий</li>
+          <li>Метрики и валидация (повторение занятия 2)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide" id="s4">
+    <h2>Мостик от занятий 2–3</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Занятие 2: классический ML</h3>
+        <ul>
+          <li>Линейные модели, kNN, деревья, ансамбли.</li>
+          <li>Признаки готовит человек (feature engineering).</li>
+          <li>Предел: качество упирается в качество признаков.</li>
+        </ul>
+      </div>
+      <div class="panel card">
+        <h3>Занятие 3: без учителя</h3>
+        <ul>
+          <li>PCA и автоэнкодер — сжатие представлений.</li>
+          <li>Автоэнкодер — мост к глубокому обучению.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="panel">
+      <p>Вопрос занятия 4: <strong>можно ли научиться самим признакам, а не получать их от человека?</strong></p>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide" id="s5">
+    <h2>Признаки вручную vs признаки из данных</h2>
+    <ul>
+      <li>Классический ML: эксперт придумывает признаки → модель учит веса.</li>
+      <li>Глубокое обучение: сеть сама строет иерархию представлений из сырых данных.</li>
+      <li>Цена: нужно много данных, вычислений и аккуратности.</li>
+    </ul>
+    <div class="panel">
+      <p class="formula">$$x \;\longrightarrow\; \text{слой}_1 \;\longrightarrow\; \text{слой}_2 \;\longrightarrow\; \dots \;\longrightarrow\; \hat{y}$$</p>
+      <p class="small">Каждый слой извлекает всё более абстрактные признаки: края → формы → объекты.</p>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide" id="s6">
+    <h2>Где глубокое обучение выигрывает</h2>
+    <div class="grid-3">
+      <div class="panel card">
+        <h3>Изображения</h3>
+        <p>Классификация, детекция, сегментация: свёрточные сети (CNN).</p>
+      </div>
+      <div class="panel card">
+        <h3>Текст и речь</h3>
+        <p>Эмбеддинги, трансформеры: NLP, перевод, классификация обращений.</p>
+      </div>
+      <div class="panel card">
+        <h3>Последовательности</h3>
+        <p>Логи, сетевой трафик, метрики: аномалии и прогнозирование.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide" id="s7">
+    <h2>Нейрон: базовый строительный блок</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Формула нейрона</h3>
+        <p class="formula">$$z = \langle w, x \rangle + b$$</p>
+        <p class="formula">$$a = \varphi(z)$$</p>
+        <ul>
+          <li><span class="accent">w</span> — веса, <span class="accent">b</span> — смещение;</li>
+          <li><span class="accent">φ</span> — функция активации (нелинейность).</li>
+        </ul>
+      </div>
+      <div class="panel card">
+        <h3>Интуиция</h3>
+        <ul>
+          <li>Нейрон = знакомая линейная модель из занятия 2…</li>
+          <li>…плюс нелинейная активация на выходе.</li>
+          <li>Без активации любая сеть оставалась бы линейной моделью.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide" id="s8">
+    <h2>Функции активации</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Sigmoid / tanh</h3>
+        <p class="formula">$$\sigma(z) = \frac{1}{1+e^{-z}}$$</p>
+        <p class="small">Сжимают в (0, 1) / (−1, 1); страдают от затухающих градиентов.</p>
+      </div>
+      <div class="panel card">
+        <h3>ReLU</h3>
+        <p class="formula">$$\mathrm{ReLU}(z) = \max(0, z)$$</p>
+        <p class="small">Стандарт скрытых слоёв: дешёвая и без затухания градиента.</p>
+      </div>
+      <div class="panel card">
+        <h3>Softmax (выход)</h3>
+        <p class="formula">$$\mathrm{softmax}(z)_i = \frac{e^{z_i}}{\sum_j e^{z_j}}$$</p>
+        <p class="small">Превращает логиты (сырые выходы нейронов) в вероятности классов.</p>
+      </div>
+      <div class="panel card">
+        <h3>Линейная (выход)</h3>
+        <p class="formula">$$\varphi(z) = z$$</p>
+        <p class="small">Для задач регрессии на выходе сети.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide" id="s9">
+    <h2>Зачем нужна нелинейность: пример XOR</h2>
+    <ul>
+      <li>Один линейный слой разделяет данные только прямой (гиперплоскостью).</li>
+      <li>XOR линейно неразделим — вспомните занятие 2 и семинары.</li>
+      <li>Композиция нелинейностей строит сколь угодно сложные границы.</li>
+    </ul>
+    <div class="panel">
+      <p class="formula">$$\hat{y} = \varphi_2\!\big(W_2\,\varphi_1(W_1 x + b_1) + b_2\big)$$</p>
+      <p class="small">Два слоя с активацией уже решают XOR.</p>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide" id="s10">
+    <h2>Архитектура: слои и глубина</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Структура сети</h3>
+        <ul>
+          <li>Входной слой: сырые признаки (пиксели, эмбеддинги).</li>
+          <li>Скрытые слои: извлечение представлений.</li>
+          <li>Выходной слой: предсказание (класс, число).</li>
+          <li>«Глубокая» = много скрытых слоёв.</li>
+        </ul>
+      </div>
+      <figure class="panel img-contain">
+        <img src="img/mlp_scheme.svg" alt="MLP">
+        <figcaption>Многослойный перцептрон (MLP): слои и связи между нейронами</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide" id="s11">
+    <h2>Прямое распространение (forward pass)</h2>
+    <p class="formula">$$h^{(l)} = \varphi\!\big(W^{(l)} h^{(l-1)} + b^{(l)}\big), \qquad h^{(0)} = x$$</p>
+    <ul>
+      <li>Каждый слой: матричное умножение + активация.</li>
+      <li>Вычисления идут последовательно от входа к выходу.</li>
+      <li>Именно этот проход даёт предсказание модели.</li>
+    </ul>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide" id="s12">
+    <h2>Параметры сети</h2>
+    <ul>
+      <li>Учатся только веса <span class="accent">W</span> и смещения <span class="accent">b</span>; архитектуры и активации задаёт человек.</li>
+      <li>Слой \(n \times m\) имеет \(m \cdot n + m\) параметров.</li>
+      <li>Миллионы и миллиарды параметров — норма для современных сетей.</li>
+    </ul>
+    <div class="panel">
+      <p class="small">Пример: слой 784→128 (digits) = 784·128 + 128 = 100 480 параметров.</p>
+    </div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide" id="s13">
+    <h2>Функция потерь: регрессия</h2>
+    <p class="formula">$$L = \frac{1}{n}\sum_{i=1}^{n} (y_i - \hat{y}_i)^2 \quad (\text{MSE})$$</p>
+    <ul>
+      <li>Потеря измеряет ошибку сети на всей выборке.</li>
+      <li>Обучение = минимизация потерь по параметрам.</li>
+      <li>Для регрессии — MSE/MAE, вспомните занятие 2.</li>
+    </ul>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide" id="s14">
+    <h2>Функция потерь: классификация</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Бинарная (cross-entropy)</h3>
+        <p class="formula">$$L = -\frac{1}{n}\sum_i \big[y_i \ln \hat{y}_i + (1-y_i)\ln(1-\hat{y}_i)\big]$$</p>
+      </div>
+      <div class="panel card">
+        <h3>Мультикласс (softmax + CE)</h3>
+        <p class="formula">$$L = -\frac{1}{n}\sum_i \ln \hat{y}_{i,\,y_i}$$</p>
+        <p class="small">Штрафуем вероятность правильного класса.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide" id="s15">
+    <h2>Обучение = оптимизация</h2>
+    <p class="formula">$$w \;\leftarrow\; w - \eta\, \nabla_w L$$</p>
+    <ul>
+      <li><span class="accent">∇L</span> — градиент: направление наискорейшего роста потерь.</li>
+      <li>Шаг в противоположную сторону уменьшает потерю.</li>
+      <li><span class="accent">η</span> — learning rate: размер шага.</li>
+    </ul>
+  </section>
+
+  <!-- 16 -->
+  <section class="slide" id="s16">
+    <h2>Интуиция градиента</h2>
+    <ul>
+      <li>Частная производная \(\frac{\partial L}{\partial w_j}\) — насколько потеря чувствительна к весу \(w_j\).</li>
+      <li>Аналогия: спуск с холма по самому крутому склону.</li>
+      <li>Проблема: сеть — композиция сотен операций; как посчитать производные?</li>
+    </ul>
+    <div class="panel">
+      <p>Ответ даёт правило дифференцирования сложной функции — <strong>chain rule</strong>.</p>
+    </div>
+  </section>
+
+  <!-- 17 -->
+  <section class="slide" id="s17">
+    <h2>Обратное распространение (backprop)</h2>
+    <p class="formula">$$\frac{\partial L}{\partial w} = \frac{\partial L}{\partial a}\cdot\frac{\partial a}{\partial z}\cdot\frac{\partial z}{\partial w}$$</p>
+    <ul>
+      <li>Ошибка propagates от выхода ко входу по цепочке слоёв.</li>
+      <li>За один обратный проход получаем градиенты <em>всех</em> параметров.</li>
+      <li>Это лишь аккуратное применение chain rule, а не магия.</li>
+    </ul>
+  </section>
+
+  <!-- 18 -->
+  <section class="slide" id="s18">
+    <h2>Вычислительный граф</h2>
+    <div class="grid">
+      <figure class="panel img-contain">
+        <img src="img/backprop_graph.svg" alt="Backprop">
+        <figcaption>Forward считает потерю, backward — градиенты по всем узлам графа</figcaption>
+      </figure>
+      <div class="panel card">
+        <h3>Что делает фреймворк</h3>
+        <ul>
+          <li>Строит граф операций при прямом проходе.</li>
+          <li><code>loss.backward()</code> обходит граф в обратную сторону.</li>
+          <li>Человек не пишет производные вручную.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 19 -->
+  <section class="slide" id="s19">
+    <h2>SGD и мини-батчи</h2>
+    <p class="formula">$$w \;\leftarrow\; w - \eta\, \nabla_w L_{\text{batch}}$$</p>
+    <ul>
+      <li>Полный градиент по всей выборке дорог: считаем по мини-батчу (32–256 объектов).</li>
+      <li>Стохастичность шумит, но помогает escapar из плоских минимумов.</li>
+      <li>Один проход по выборке = одна <strong>эпоха</strong>.</li>
+    </ul>
+  </section>
+
+  <!-- 20 -->
+  <section class="slide" id="s20">
+    <h2>Learning rate: главный гиперпараметр</h2>
+    <div class="grid">
+      <figure class="panel img-contain">
+        <img src="img/lr_curve.png" alt="LR curve">
+        <figcaption>Слишком большой η — расходимость; слишком малый — вязкий спуск</figcaption>
+      </figure>
+      <div class="panel card">
+        <h3>Практика</h3>
+        <ul>
+          <li>Начинают с 1e-3 (Adam) и подбирают по валидации.</li>
+          <li>Schedule: уменьшение η по ходу обучения.</li>
+          <li>Кривые потерь train/val — главный диагностический инструмент.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 21 -->
+  <section class="slide" id="s21">
+    <h2>Оптимизаторы: momentum и Adam (обзорно)</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Momentum</h3>
+        <p class="formula">$$v \leftarrow \mu v + \nabla L, \qquad w \leftarrow w - \eta v$$</p>
+        <p class="small">Накопленная «скорость» сглаживает колебания спуска.</p>
+      </div>
+      <div class="panel card">
+        <h3>Adam</h3>
+        <ul>
+          <li>Адаптивный шаг для каждого параметра.</li>
+          <li>Стандартный выбор по умолчанию в большинстве задач.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 22 -->
+  <section class="slide" id="s22">
+    <h2>Эпохи, переобучение и валидация</h2>
+    <ul>
+      <li>Сети с миллионами параметров легко запоминают выборку (переобучение, занятие 2).</li>
+      <li>Следим за кривыми train/val: расхождение кривых — сигнал стоп.</li>
+      <li>Early stopping: останавливаем обучение на лучшей эпохе по валидации.</li>
+    </ul>
+    <div class="panel">
+      <p class="small">Данные делим так же, как в занятии 2: train / val / test, fit только на train.</p>
+    </div>
+  </section>
+
+  <!-- 23 -->
+  <section class="slide" id="s23">
+    <h2>Регуляризация нейросетей</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>L2 (weight decay)</h3>
+        <p class="formula">$$L_{reg} = L + \lambda \sum_j w_j^2$$</p>
+        <p class="small">Штрафуем большие веса — та же идея, что в занятии 2.</p>
+      </div>
+      <div class="panel card">
+        <h3>Dropout</h3>
+        <ul>
+          <li>На обучении случайно «выключаем» долю нейронов.</li>
+          <li>Сеть не зависит от отдельных нейронов → ансамбль внутри.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 24 -->
+  <section class="slide" id="s24">
+    <h2>BatchNorm: идея (обзорно)</h2>
+    <ul>
+      <li>Нормализует активации внутри батча: среднее ≈ 0, разброс ≈ 1.</li>
+      <li>Ускоряет и стабилизирует обучение, позволяет больше η.</li>
+      <li>Побочный эффект — лёгкая регуляризация.</li>
+      <li>Масштабирующие параметры γ, β учатся вместе с сетью.</li>
+    </ul>
+  </section>
+
+  <!-- 25 -->
+  <section class="slide" id="s25">
+    <h2>Проблема затухающих градиентов</h2>
+    <ul>
+      <li>В глубоких сетях с sigmoid градиенты к ранним слоям стремятся к нулю.</li>
+      <li>Ранние слои перестают учиться.</li>
+    </ul>
+    <div class="panel card">
+      <h3>Решения</h3>
+      <ul>
+        <li>ReLU вместо sigmoid;</li>
+        <li>аккуратная инициализация весов;</li>
+        <li>BatchNorm;</li>
+        <li>остаточные связи (ResNet — обзорно).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 26 -->
+  <section class="slide" id="s26">
+    <h2>Инициализация весов (обзорно)</h2>
+    <ul>
+      <li>Нули — нельзя: нейроны станут одинаковыми (симметрия).</li>
+      <li>Xavier/Glorot — для sigmoid/tanh; He — для ReLU: \(\sigma^2 = 2/n\).</li>
+      <li>Правильный старт решает, сойдётся ли обучение вообще.</li>
+    </ul>
+    <div class="panel">
+      <p class="small">Во фреймворках инициализация по умолчанию уже разумная — но знать причину полезно.</p>
+    </div>
+  </section>
+
+  <!-- 27 -->
+  <section class="slide" id="s27">
+    <h2>Фреймворки: PyTorch и TensorFlow/Keras</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>PyTorch</h3>
+        <ul>
+          <li>Pythonic-API, динамический граф.</li>
+          <li>Стандарт в исследованиях и всё чаще в проде.</li>
+        </ul>
+      </div>
+      <div class="panel card">
+        <h3>TensorFlow / Keras</h3>
+        <ul>
+          <li>Зрелый продакшн: TF Serving, мобильный вывод.</li>
+          <li>Keras — высокоуровневый API для быстрых экспериментов.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="panel"><p>Оба дают <strong>автоград</strong>: автоматическое дифференцирование.</p></div>
+  </section>
+
+  <!-- 28 -->
+  <section class="slide" id="s28">
+    <h2>Автоград: производные без формул</h2>
+    <ul>
+      <li>Фреймворк записывает операции прямого прохода в граф.</li>
+      <li>Вызов <code>backward()</code> применяет chain rule ко всем узлам.</li>
+      <li>Разработчик модели не выводит производные вручную.</li>
+    </ul>
+    <div class="panel">
+      <p class="small">Именно автоград сделал глубокое обучение инженерной дисциплиной, а не искусством дифференцирования.</p>
+    </div>
+  </section>
+
+  <!-- 29 -->
+  <section class="slide" id="s29">
+    <h2>Типовой пайплайн обучения</h2>
+    <ol>
+      <li>Данные и преобразования (нормализация!, занятие 2).</li>
+      <li>Модель: архитектура и размеры слоёв.</li>
+      <li>Функция потерь и оптимизатор.</li>
+      <li>Цикл: forward → loss → backward → step.</li>
+      <li>Валидация, метрики, early stopping.</li>
+    </ol>
+  </section>
+
+  <!-- 30 -->
+  <section class="slide" id="s30">
+    <h2>Минимальный цикл обучения на PyTorch</h2>
+    <pre><code>import torch, torch.nn as nn
+
+model = nn.Sequential(
+    nn.Linear(64, 128), nn.ReLU(),
+    nn.Linear(128, 64), nn.ReLU(),
+    nn.Linear(64, 10),
+)
+loss_fn = nn.CrossEntropyLoss()
+opt = torch.optim.Adam(model.parameters(), lr=1e-3)
+
+for epoch in range(10):
+    for Xb, yb in train_loader:
+        opt.zero_grad()
+        loss = loss_fn(model(Xb), yb)
+        loss.backward()
+        opt.step()</code></pre>
+  </section>
+
+  <!-- 31 -->
+  <section class="slide" id="s31">
+    <h2>Валидация и метрики нейросетей</h2>
+    <ul>
+      <li>Те же метрики, что в занятии 2: accuracy, precision/recall, ROC-AUC, F1.</li>
+      <li>Дисбаланс классов: те же ловушки (accuracy бесполезна).</li>
+      <li>Масштабирование признаков обязательно: сети чувствительны к масштабу.</li>
+      <li>Сравниваем с базовыми моделями занятия 2 (kNN, RF) — дешёвый бенчмарк.</li>
+    </ul>
+  </section>
+
+  <!-- 32 -->
+  <section class="slide" id="s32">
+    <h2>Свёрточные сети (CNN): идея</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Что такое свёртка</h3>
+        <ul>
+          <li>Маленький фильтр скользит по изображению.</li>
+          <li>Каждый фильтр детектирует свой паттерн (край, текстура).</li>
+          <li>Слои строят иерархию: края → формы → объекты.</li>
+        </ul>
+      </div>
+      <figure class="panel img-contain">
+        <img src="img/conv_scheme.svg" alt="CNN">
+        <figcaption>Фильтр скользит по изображению и строит карту признаков</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 33 -->
+  <section class="slide" id="s33">
+    <h2>Свёртка формально</h2>
+    <p class="formula">$$S(i,j) = \sum_m \sum_k I(i+m,\; j+k)\, K(m,k)$$</p>
+    <ul>
+      <li><span class="accent">K</span> — ядро свёртки: небольшая матрица обучаемых весов.</li>
+      <li>Веса общие для всей картинки (weight sharing) → параметров мало.</li>
+      <li>Несколько фильтров → несколько карт признаков в одном слое.</li>
+    </ul>
+  </section>
+
+  <!-- 34 -->
+  <section class="slide" id="s34">
+    <h2>Stride, padding, pooling (обзорно)</h2>
+    <div class="grid-3">
+      <div class="panel card">
+        <h3>Stride</h3>
+        <p>Шаг скольжения фильтра; stride &gt; 1 уменьшает размер карты.</p>
+      </div>
+      <div class="panel card">
+        <h3>Padding</h3>
+        <p>Добавление рамки нулей: сохраняем размер и информацию о краях.</p>
+      </div>
+      <div class="panel card">
+        <h3>Pooling</h3>
+        <p>Уменьшение разрешения (max-pool): инвариантность к малым сдвигам.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 35 -->
+  <section class="slide" id="s35">
+    <h2>Почему CNN лучше MLP на изображениях</h2>
+    <ul>
+      <li>Локальность: паттерн виден в малой области, не во всей картинке.</li>
+      <li>Инвариантность к сдвигу: объект узнаётся в любом месте.</li>
+      <li>На порядок меньше параметров при том же качестве.</li>
+    </ul>
+    <div class="panel">
+      <p class="small">MLP на картинке 224×224×3 имел бы первый слой в миллионы весов без всякой структуры.</p>
+    </div>
+  </section>
+
+  <!-- 36 -->
+  <section class="slide" id="s36">
+    <h2>CNN в задачах безопасности (обзорно)</h2>
+    <ul>
+      <li>Классификация вредоносных файлов (бинарники как изображения).</li>
+      <li>Детекция аномального трафика по спектрограммам/представлениям пакетов.</li>
+      <li>Распознавание лиц и объектов в видеоаналитике.</li>
+      <li>Осторожно: качество упирается в размеченные данные и дрейф (занятие 3).</li>
+    </ul>
+  </section>
+
+  <!-- 37 -->
+  <section class="slide" id="s37">
+    <h2>Рекуррентные сети (RNN) для последовательностей</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Идея</h3>
+        <ul>
+          <li>Сеть хранит скрытое состояние во времени.</li>
+          <li>Обрабатывает логи, текст, трафик, метрики.</li>
+          <li>Проблема: затухающий градиент на длинных последовательностях.</li>
+        </ul>
+      </div>
+      <figure class="panel img-contain">
+        <img src="img/rnn_scheme.svg" alt="RNN">
+        <figcaption>RNN: состояние передаётся от шага к шагу</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 38 -->
+  <section class="slide" id="s38">
+    <h2>LSTM/GRU и трансформеры (обзорно)</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>LSTM / GRU</h3>
+        <p>Вентили против затухающего градиента: память на длинные зависимости.</p>
+      </div>
+      <div class="panel card">
+        <h3>Transformer</h3>
+        <p>Механизм внимания (attention); параллельное обучение; стандарт NLP и всё чаще временных рядов.</p>
+      </div>
+    </div>
+    <div class="panel"><p class="small">Детали трансформеров — тема отдельных занятий; здесь достаточно знать место в иерархии архитектур.</p></div>
+  </section>
+
+  <!-- 39 -->
+  <section class="slide" id="s39">
+    <h2>Эмбеддинги: векторные представления</h2>
+    <ul>
+      <li>Объект (слово, запрос, событие) отображается в плотный вектор.</li>
+      <li>Близкие по смыслу объекты близки в пространстве.</li>
+      <li>Эмбеддинги можно подавать классическим моделям занятия 2 (kNN, RF).</li>
+    </ul>
+    <div class="panel">
+      <p class="small">Мост между глубоким обучением и классическим ML-пайплайном.</p>
+    </div>
+  </section>
+
+  <!-- 40 -->
+  <!-- 40 -->
+  <section class="slide" id="s40">
+    <h2>Автоэнкодер: мостик из занятия 3</h2>
+    <div class="grid">
+      <figure class="panel img-contain">
+        <img src="img/autoencoder.png" alt="AE">
+        <figcaption>Encoder сжимает вход в код, decoder восстанавливает вход</figcaption>
+      </figure>
+      <div class="panel card">
+        <h3>Формулы</h3>
+        <p class="formula">$$\hat{x} = D(E(x))$$</p>
+        <p class="formula">$$L = \| x - \hat{x} \|^2$$</p>
+        <p class="small">Узкое место (bottleneck) учит сжатое представление — как PCA, но нелинейное.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 41 -->
+  <section class="slide" id="s41">
+    <h2>Автоэнкодер для поиска аномалий</h2>
+    <ul>
+      <li>Учим на нормальных данных: они восстанавливаются хорошо.</li>
+      <li>Аномалия даёт большую ошибку реконструкции \(\|x-\hat{x}\|^2\).</li>
+      <li>Порог ошибки — по квантили на валидации (приём из занятия 3).</li>
+    </ul>
+    <div class="panel">
+      <p class="small">Связка: аномалии (занятие 3) + глубокое обучение (занятие 4) = рабочий детектор для сложных данных.</p>
+    </div>
+  </section>
+
+  <!-- 42 -->
+  <section class="slide" id="s42">
+    <h2>Adversarial-примеры (обзорно)</h2>
+    <div class="grid">
+      <div class="panel card">
+        <h3>Атака FGSM</h3>
+        <p class="formula">$$x' = x + \varepsilon \cdot \mathrm{sign}\big(\nabla_x L(x, y)\big)$$</p>
+        <p class="small">Незаметное возмущение вдоль градиента меняет предсказание.</p>
+      </div>
+      <figure class="panel img-contain">
+        <img src="img/fgsm.png" alt="FGSM">
+        <figcaption>Классический пример: panda + шум → gibbon с уверенностью 99%</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 43 -->
+  <section class="slide" id="s43">
+    <h2>Устойчивость моделей: что делают на практике</h2>
+    <ul>
+      <li>Adversarial-training: обучение на примерах с возмущениями.</li>
+      <li>Контроль входных данных и мониторинг уверенности предсказаний.</li>
+      <li>Ансамбли и детекторы выбросов на входе (мостик к занятию 3).</li>
+      <li>Полной защиты нет: robustness — свойство, которое проектируют.</li>
+    </ul>
+  </section>
+
+  <!-- 44 -->
+  <section class="slide" id="s44">
+    <h2>Пределы глубокого обучения</h2>
+    <ul>
+      <li>Требует много размеченных данных и вычислений.</li>
+      <li>Плохо интерпретируемо: «чёрный ящик».</li>
+      <li>Чувствительно к дрейфу распределения (MLSecOps, занятие 3).</li>
+      <li>Часто проигрывает градиентному бустингу на табличных данных.</li>
+    </ul>
+  </section>
+
+  <!-- 45 -->
+  <section class="slide" id="s45">
+    <h2>Интерпретируемость (обзорно)</h2>
+    <ul>
+      <li>Saliency-карты: какие пиксели повлияли на решение.</li>
+      <li>Attention-веса: на что смотрел трансформер.</li>
+      <li>SHAP/LIME: локальные объяснения предсказаний (идеи из занятия 2).</li>
+      <li>В безопасности объяснимость — требование регуляторов и расследований.</li>
+    </ul>
+  </section>
+
+  <!-- 46 -->
+  <section class="slide" id="s46">
+    <h2>Transfer learning и предобученные модели</h2>
+    <ul>
+      <li>Берём сеть, предобученную на большом датасете (ImageNet, текстовые корпуса).</li>
+      <li>Дообучаем (fine-tune) на своих данных — экономим данные и время.</li>
+      <li>Стандартная практика: своя модель с нуля нужна редко.</li>
+    </ul>
+  </section>
+
+  <!-- 47 -->
+  <section class="slide" id="s47">
+    <h2>Связь с MLSecOps</h2>
+    <ul>
+      <li>DL-детекторы вредоносного ПО и аномального трафика.</li>
+      <li>Автоэнкодеры для мониторинга метрик и логов (занятие 3).</li>
+      <li>Adversarial-риски: атаки на сами ML-модели в проде.</li>
+      <li>Жизненный цикл: дрейф, переобучение, деградация качества со временем.</li>
+    </ul>
+  </section>
+
+  <!-- 48 -->
+  <section class="slide" id="s48">
+    <h2>Практика: план работы</h2>
+    <div class="grid-3">
+      <div class="panel card">
+        <h3>Часть 1. MLP</h3>
+        <p>sklearn MLPClassifier на digits; сравнение с kNN/RF из занятия 2.</p>
+      </div>
+      <div class="panel card">
+        <h3>Часть 2. PyTorch</h3>
+        <p>Свой цикл обучения: Adam, dropout, early stopping; кривые потерь.</p>
+      </div>
+      <div class="panel card">
+        <h3>Часть 3. Автоэнкодер</h3>
+        <p>Поиск аномалий по ошибке реконструкции; порог по квантили.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 49 -->
+  <section class="slide" id="s49">
+    <h2>Практика: быстрый старт и чек-поинты</h2>
+    <pre><code>from sklearn.neural_network import MLPClassifier
+
+clf = MLPClassifier(hidden_layer_sizes=(128, 64),
+                    activation="relu", solver="adam",
+                    max_iter=200, random_state=42)
+clf.fit(X_train, y_train)</code></pre>
+    <ul>
+      <li>Чек-поинт 1: accuracy/F1 против kNN и RF (занятие 2).</li>
+      <li>Чек-поинт 2: кривые train/val — есть ли переобучение?</li>
+      <li>Чек-поинт 3: precision@k автоэнкодера на синтетических выбросах (занятие 3).</li>
+    </ul>
+  </section>
+
+  <!-- 50 -->
+  <section class="slide" id="s50">
+    <h2>Итоги занятия</h2>
+    <ul>
+      <li>Нейрон = линейная модель + нелинейная активация; глубина = композиция.</li>
+      <li>Обучение = минимизация потерь: градиент, backprop, SGD/Adam.</li>
+      <li>Регуляризация и валидация работают так же, как в классическом ML.</li>
+      <li>CNN — изображения, RNN/трансформеры — последовательности, автоэнкодер — мост к занятию 3.</li>
+      <li>DL силён, но требует данных, вычислений и осторожности в задачах безопасности.</li>
+    </ul>
+    <div class="panel">
+      <p><strong>Следующий шаг:</strong> практический ноутбук — MLP на digits, цикл обучения на PyTorch и автоэнкодер для аномалий.</p>
+    </div>
+  </section>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const counter = document.getElementById('counter');
+    let current = 0;
+
+    function show(index) {
+      current = Math.max(0, Math.min(index, slides.length - 1));
+      slides.forEach((slide, i) => {
+        slide.classList.toggle('active', i === current);
+      });
+      counter.textContent = `${current + 1} / ${slides.length}`;
+      history.replaceState(null, '', `#${current + 1}`);
+    }
+
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') {
+        event.preventDefault();
+        show(current + 1);
+      } else if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+        event.preventDefault();
+        show(current - 1);
+      } else if (event.key === 'Home') {
+        event.preventDefault();
+        show(0);
+      } else if (event.key === 'End') {
+        event.preventDefault();
+        show(slides.length - 1);
+      }
+    });
+
+    const initialHash = parseInt(location.hash.replace('#', ''), 10);
+    if (!Number.isNaN(initialHash)) {
+      show(initialHash - 1);
+    } else {
+      show(0);
+    }
+  </script>
+</body>
+</html>
